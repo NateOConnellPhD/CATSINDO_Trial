@@ -26,74 +26,74 @@
 #' }
 #'
 #' @export
-true_model <- function(
-    doses,
-    probs,
-    true_mtd,
-    true_dlt_rate,
-    link = c("logit", "probit"),
-    plot = TRUE,
-    plot_range = range(doses)
-) {
-  stopifnot(length(doses) == length(probs))
-  stopifnot(all(probs > 0 & probs < 1))
-  
-  link <- match.arg(link)
-  qlink <- if (link == "logit") qlogis else qnorm
-  plink <- if (link == "logit") plogis else pnorm
-  
-  # Link-scale value at the constraint
-  target_link <- qlink(true_dlt_rate)
-  
-  # Define loss as function of beta only (alpha is solved from constraint)
-  loss_fn <- function(beta) {
-    alpha <- target_link - beta * true_mtd
-    pred <- plink(alpha + beta * doses)
-    sum((pred - probs)^2)
-  }
-  
-  # Optimize beta under constraint
-  opt <- optimize(loss_fn, interval = c(-100, 100))
-  beta <- opt$minimum
-  alpha <- target_link - beta * true_mtd
-  
-  # Final model function
-  true_prob_dlt <- function(thresh) plink(alpha + beta * thresh)
-  fitted_probs <- true_prob_dlt(doses)
-  
-  if (plot) {
-    dose_seq <- seq(plot_range[1], plot_range[2], by = 0.001)
-    plot(dose_seq, true_prob_dlt(dose_seq),
-         type = "l", lwd = 2, col = "blue",
-         ylab = "DLT Probability", xlab = "Threshold",
-         main = paste("Constrained Dose-Toxicity Curve (", link, " link)", sep = ""))
-    
-    points(doses, probs, pch = 19, col = "red")
-    
-    abline(h = true_dlt_rate, v = true_mtd, col = "darkgreen", lty = 2)
-    text(true_mtd, true_dlt_rate - 0.03,
-         labels = paste0("True MTD = ", true_mtd,
-                         "\nDLT Rate = ", true_dlt_rate),
-         col = "darkgreen", pos = 4)
-    
-    legend("topleft",
-           legend = c("Fitted Curve", "Specified Points", "True MTD Constraint"),
-           col = c("blue", "red", "darkgreen"),
-           lty = c(1, NA, 2),
-           pch = c(NA, 19, NA),
-           bty = "n")
-  }
-  
-  list(
-    true_prob_dlt = true_prob_dlt,
-    alpha = alpha,
-    beta = beta,
-    fitted_probs = fitted_probs,
-    doses = doses,
-    probs = probs,
-    true_mtd = true_mtd,
-    true_dlt_rate = true_dlt_rate,
-    link = link
-  )
-}
-
+# true_model <- function(
+#     doses,
+#     probs,
+#     true_mtd,
+#     true_dlt_rate,
+#     link = c("logit", "probit"),
+#     plot = TRUE,
+#     plot_range = range(doses)
+# ) {
+#   stopifnot(length(doses) == length(probs))
+#   stopifnot(all(probs > 0 & probs < 1))
+#   
+#   link <- match.arg(link)
+#   qlink <- if (link == "logit") qlogis else qnorm
+#   plink <- if (link == "logit") plogis else pnorm
+#   
+#   # Link-scale value at the constraint
+#   target_link <- qlink(true_dlt_rate)
+#   
+#   # Define loss as function of beta only (alpha is solved from constraint)
+#   loss_fn <- function(beta) {
+#     alpha <- target_link - beta * true_mtd
+#     pred <- plink(alpha + beta * doses)
+#     sum((pred - probs)^2)
+#   }
+#   
+#   # Optimize beta under constraint
+#   opt <- optimize(loss_fn, interval = c(-100, 100))
+#   beta <- opt$minimum
+#   alpha <- target_link - beta * true_mtd
+#   
+#   # Final model function
+#   true_prob_dlt <- function(thresh) plink(alpha + beta * thresh)
+#   fitted_probs <- true_prob_dlt(doses)
+#   
+#   if (plot) {
+#     dose_seq <- seq(plot_range[1], plot_range[2], by = 0.001)
+#     plot(dose_seq, true_prob_dlt(dose_seq),
+#          type = "l", lwd = 2, col = "blue",
+#          ylab = "DLT Probability", xlab = "Threshold",
+#          main = paste("Constrained Dose-Toxicity Curve (", link, " link)", sep = ""))
+#     
+#     points(doses, probs, pch = 19, col = "red")
+#     
+#     abline(h = true_dlt_rate, v = true_mtd, col = "darkgreen", lty = 2)
+#     text(true_mtd, true_dlt_rate - 0.03,
+#          labels = paste0("True MTD = ", true_mtd,
+#                          "\nDLT Rate = ", true_dlt_rate),
+#          col = "darkgreen", pos = 4)
+#     
+#     legend("topleft",
+#            legend = c("Fitted Curve", "Specified Points", "True MTD Constraint"),
+#            col = c("blue", "red", "darkgreen"),
+#            lty = c(1, NA, 2),
+#            pch = c(NA, 19, NA),
+#            bty = "n")
+#   }
+#   
+#   list(
+#     true_prob_dlt = true_prob_dlt,
+#     alpha = alpha,
+#     beta = beta,
+#     fitted_probs = fitted_probs,
+#     doses = doses,
+#     probs = probs,
+#     true_mtd = true_mtd,
+#     true_dlt_rate = true_dlt_rate,
+#     link = link
+#   )
+# }
+# 
