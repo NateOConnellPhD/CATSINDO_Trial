@@ -1,0 +1,99 @@
+%\documentclass[AMA,STIX1COL]{WileyNJD-v2}
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+
+\usepackage{graphicx}
+\newtheorem{theorem}{Theorem}
+\usepackage{setspace}
+\usepackage{sectsty}
+\sectionfont{\fontsize{14}{12}\selectfont}
+
+\usepackage{multirow}
+
+\usepackage{moreverb}
+\usepackage{amsmath, amssymb, amsfonts, amsthm}
+\usepackage{pdflscape}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{authblk}
+\usepackage{natbib}
+\usepackage{graphicx}
+\newcommand{\indep}{\rotatebox[origin=c]{90}{$\models$}}
+
+\def\bSig\mathbf{\Sigma}
+\newcommand{\VS}{V\&S}
+\newcommand{\tr}{\mbox{tr}}
+\newcommand*{\QEDB}{\hfill\ensuremath{\square}}%
+%\providecommand{\keywords}[1]{\textbf{\textit{Index terms---}} #1}
+\DeclareMathOperator{\logit}{logit}
+\DeclareMathOperator*{\argmin}{arg\,min} % Jan Hlavacek
+
+\newcommand\BibTeX{{\rmfamily B\kern-.05em \textsc{i\kern-.025em b}\kern-.08em
+		T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+
+\title{Predictive Overbooking via Decision Threshold Optimization: An Algorithmic Approach for Overbooking Patients at High Risk of `No-Show' in Outpatient Clinic Visits
+	%\protect\thanks{This is an example for title footnote.}
+}
+
+\author[1,*]{Nathaniel S. O'Connell}
+
+\affil[1]{Department of Biostatistics and Data Science, Wake Forest University School of Medicine, Winston Salem, North Carolina, USA}
+\affil[*]{Corresponding Author: Nathaniel O'Connell, n.oconnell@wakehealth.edu, Department of Biostatistics and Data Science,
+	Wake Forest School of Medicine,
+	Medical Center Boulevard,
+	Winston-Salem, NC 27157
+}
+\renewcommand\Authands{ and }
+
+
+\begin{document}
+	
+	\label{firstpage}
+	
+	\clearpage\maketitle
+	\thispagestyle{empty}
+	
+	\begin{abstract}
+		
+		test	
+	\end{abstract}
+	
+	
+	
+	{\bf Keywords:} dose-finding; non-inferiority; bayesian dose-finding; adaptive design
+	
+	\doublespacing
+	\newpage
+	
+	
+	
+	\section{Introduction}
+	
+	
+	\subsection{Motivating Trial}
+This proposed "dose-finding" methodology is motivated by the "Clinical and Translational Study in Newly Diagnosed Osteosarcoma" (CATSINDO) trial, conducted by the ARISE Cancer Consortium. Newly diagnosed osteosarcoma patients typically undergo surgical resection of the primary tumor, followed by chemotherapy with high-dose methotrexate (HDMTX), doxorubicin, and cisplatin (MAP). The treatment timeline generally involves 10 weeks of MAP chemotherapy, followed by surgical resection, and an additional 16 weeks of adjuvant MAP chemotherapy.
+
+The treatment regimen requires 16 inpatient hospital stays, averaging 3-4 days each, with 12 of those stays necessary for HDMTX administration. After HDMTX administration, serum methotrexate (MTX) levels are closely monitored, and patients are considered for discharge when their MTX concentration recovers to an acceptable level. Elevated MTX concentrations are associated with a higher risk of serious adverse events (SAEs), including mucositis, elevated serum creatinine, elevated liver biomarkers, and thrombocytopenia. The current standard for a safe discharge threshold is an MTX level of $<0.10$ micromolar at 72 hours, based on the trial by Marina et al. \cite{marina2016}. However, this threshold has never been thoroughly validated, and it is generally accepted that 0.10 is a conservative estimate. In fact, while 0.10 is the most commonly cited threshold in the literature, discharge criteria vary across hospitals and range from 0.10 to 0.30 or higher.
+
+Increasing this threshold safely could reduce hospital stay lengths, lower financial costs, and alleviate the overall treatment burden on patients. The goal of this study was to assess a safe threshold and perform a "dose-finding" trial to identify the maximum tolerated threshold for discharge, with dose-limiting toxicity (DLT) defined by the occurrence of an SAE post-discharge.
+
+This context led to two novel adaptations in dose-finding methodology: 1) adapting the dose-escalation framework to accommodate repeated measures within patients, and 2) defining the target DLT rate based on an acceptability margin derived from the DLT rate of the lowest threshold. Expanding on the latter, instead of setting a fixed target DLT rate, we adopt a non-inferiority trial approach. Specifically, we define an acceptable margin $\delta$, such that we seek the highest threshold where the probability of a DLT does not exceed $p(DLT_{1})+\delta$, where $p(DLT_{1})$ is the DLT probability at the lowest threshold.
+
+	\section{Methods}
+	
+Let us define a continuous dose 
+	
+	
+	\bibliographystyle{plain}
+	\begin{thebibliography}{10}
+		
+	\bibitem{marina2016}Marina, N., Smeland, S., Bielack, S., Bernstein, M., Jovic, G., Krailo, M., Hook, J., Arndt, C., Berg, H., Brennan, B. \& Others Comparison of MAPIE versus MAP in patients with a poor response to preoperative chemotherapy for newly diagnosed high-grade osteosarcoma (EURAMOS-1): an open-label, international, randomised controlled trial. {\em The Lancet Oncology}. \textbf{17}, 1396-1408 (2016)
+	
+		
+		
+	\end{thebibliography}
+	
+	
+	
+\end{document}
