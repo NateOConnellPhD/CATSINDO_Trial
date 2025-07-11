@@ -190,8 +190,10 @@ for (probs_idx in seq_along(probs_list)) {
         list(
           mtd_estimates       = result$mtd_estimates,
           final_dose_response = result$final_dose_response,
-          true_mtd            = result$true_mtd
+          true_mtd            = result$true_mtd,
+          final_mtd           = result$final_mtd  
         )
+        
         
       }, error = function(e) {
         message("    Sim ", sim_id, " failed: ", conditionMessage(e))
@@ -210,28 +212,83 @@ for (probs_idx in seq_along(probs_list)) {
 
 
 
+library(dplyr)
+library(tibble)
+library(purrr)
+library(readr)
+library(stringr)
+
+# Define doses used
+dose_levels <- c(0.1, 0.13, 0.15, 0.17, 0.20)
+
+# Path to saved simulation result files
+output_dir <- "sim_outputs"
+rds_files <- list.files(output_dir, pattern = "^results_probs.*\\.rds$", full.names = TRUE)
+
+test= readRDS("sim_outputs/results_probs1_n40.rds")
 
 
-# Extract final MTDs from each result
-final_mtds <- sapply(results_list, function(res) {
-  if (is.null(res)) return(NA)  # in case of try-catch failures
-  tail(res$mtd_estimates$mtd, 1)
-})
+# Function to extract dose selection from each simulation result
+extract_dose_selections <- function(file_path) {
+  # Get scenario info from filename
+  scenario <- str_match(basename(file_path), "results_probs(\\d+)_n(\\d+)\\.rds")
+  probs_idx <- as.integer(scenario[2])
+  n_patients <- as.integer(scenario[3])
+  
+  # Read the compiled list
+  sim_list <- readRDS(file_path)
+  
+  # Extract final selected MTD from each sim (if available)
+  mtds <- map_chr(sim_list, function(sim) {
+    if (!is.null(sim) && !is.null(sim$mtd_estimates)) {
+      tail(sim$mtd_estimates$mtd, 1)
+    } else {
+      NA_character_
+    }
+  })
+  
+  # Summarize selection frequency
+  dose_table <- table(factor(mtds, levels = dose_levels))
+  total_sims <- sum(dose_table)
+  
+  tibble(
+    probs_idx   = probs_idx,
+    n_patients  = n_patients,
+    dose        = as.numeric(names(dose_table)),
+    n_selected  = as.numeric(dose_table),
+    pct_selected = round(100 * as.numeric(dose_table) / total_sims, 1)
+  )
+}
 
 
-results_list[5]
-# Tabulate distribution
-mtd_distribution <- table(final_mtds, useNA = "ifany")
 
-# Convert to data frame
-mtd_df <- as.data.frame(mtd_distribution)
-names(mtd_df) <- c("Dose", "Count")
+# Combine results across all scenarios
+dose_selection_summary <- map_dfr(rds_files, extract_dose_selections)
 
-# Add proportions
-mtd_df$Proportion <- mtd_df$Count / sum(mtd_df$Count, na.rm = TRUE)
+# Arrange by scenario
+dose_selection_summary <- dose_selection_summary %>%
+  arrange(probs_idx, n_patients, dose)
 
-# View results
-print(mtd_df)
+# View or save
+print(dose_selection_summary)
+# Optionally write to CSV
+# write_csv(dose_selection_summary, "dose_selection_summary.csv")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

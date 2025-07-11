@@ -65,7 +65,6 @@ run_trial <- function(
   dose_scale      <- prior_info$dose_scale_factor
   min_raw         <- dose_base
   max_raw         <- max(dose_steps)
-  threshold_range <- seq(min_raw, max_raw, by = 0.001)
   
   if (is.null(starting_dose) || !(starting_dose %in% dose_steps)) {
     stop("starting_dose must be one of prior_info$doses")
@@ -177,14 +176,15 @@ run_trial <- function(
     over_prob = colMeans(step_post_mat > overdose_eval_threshold)
   )
   
+  final_mtd <- tail(mtd_estimates$mtd, 1)
+  
   list(
     visits               = visits,
     mtd_estimates        = mtd_estimates,
+    final_mtd            = final_mtd,  
     final_model          = fit,
     dlt_model            = dlt_model,
-    threshold_range      = threshold_range,
     dose_steps           = dose_steps,
-    dose_base            = dose_base,
     true_mtd             = dlt_model$true_mtd,
     target_dlt_rate      = target_dlt_rate,
     prior_info           = prior_info,
