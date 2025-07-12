@@ -201,16 +201,5 @@ run_trial <- function(
   )
 }
 
-set.seed(2025)
-result <- run_noninf_sim(n_patients = 40, true_dlt_rate = 0.15, ni_margin = 0.20)
 
-# Plot
-library(ggplot2)
-ggplot(result, aes(x = day, y = power)) +
-  geom_line(size = 1.2) +
-  geom_hline(yintercept = 0.80, linetype = "dashed", color = "red") +
-  labs(title = "Power to Declare Non-Inferiority Over Time",
-       x = "Day",
-       y = "Estimated Power") +
-  theme_minimal()
 

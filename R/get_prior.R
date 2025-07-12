@@ -51,7 +51,6 @@
 #' prior_info$true_prob_dlt(0.15)
 #'
 #' @export
-
 get_prior <- function(
     doses,
     probs,
@@ -61,7 +60,7 @@ get_prior <- function(
     int_prior         = 0.3,
     slope_prior       = NULL,
     link              = c("logit", "probit"),
-    dose_scale_factor = 100,
+    dose_scale_factor = 10,
     plot              = TRUE,
     plot_range        = range(doses),
     n_draws           = 1000
@@ -95,10 +94,16 @@ get_prior <- function(
     beta  <- opt$minimum
     alpha <- target_link - beta * smtd
   } else {
-    logits <- qlink(probs)
-    fit    <- lm(logits ~ sdoses)
-    alpha  <- coef(fit)[1]
-    beta   <- coef(fit)[2]
+    # Optimize alpha and beta directly to minimize squared error in probability space
+    loss_fn <- function(par) {
+      alpha <- par[1]
+      beta  <- par[2]
+      preds <- plink(alpha + beta * sdoses)
+      sum((preds - probs)^2)
+    }
+    opt <- optim(c(0, 1), loss_fn)
+    alpha <- opt$par[1]
+    beta  <- opt$par[2]
   }
   
   # Define prior predictive function
@@ -109,7 +114,7 @@ get_prior <- function(
   
   # Plot
   if (plot) {
-    rr  <- seq(plot_range[1], plot_range[2], length.out = 1000)
+    rr  <- seq(plot_range[1], plot_range[2], length.out = 2000)
     srr <- (rr - dose_base) * dose_scale_factor
     
     i_samp <- rnorm(n_draws, mean = alpha, sd = int_prior)
@@ -122,6 +127,8 @@ get_prior <- function(
       lower = apply(m, 1, quantile, 0.025),
       upper = apply(m, 1, quantile, 0.975)
     )
+    # Add predicted mean curve at posterior mean (no uncertainty)
+    mean_pred <- plink(alpha + beta * srr)
     
     plot(ci_df$dose, ci_df$mean, type = "l", lwd = 2, col = "darkred",
          xlab = "Dose", ylab = "DLT Probability",
@@ -132,6 +139,7 @@ get_prior <- function(
             col = adjustcolor("darkred", alpha.f = 0.15), border = NA)
     points(doses, probs, pch = 19, col = "red")
     abline(h = true_dlt_rate, v = true_mtd, col = "gray40", lty = 2)
+    lines(rr, mean_pred, lwd = 2, col = "blue", lty = 2)
   }
   
   list(

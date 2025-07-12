@@ -2,6 +2,8 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(brms)
+library(rlang)
+
 #install.packages("cmdstanr", repos = c('https://stan-dev.r-universe.dev', getOption("repos")))
 library(cmdstanr)
 #install_cmdstan()
@@ -70,13 +72,13 @@ prior_info = get_prior(
   true_dlt_rate = 0.15,
   force_through_mtd=T,
   int_prior = .5,
-  slope_prior = 3,
+  dose_scale_factor = 10,
+  slope_prior = .5,
   link="logit",
   plot=T
 )
 
 #IRB Buffer built in 
-
 ## at least 15 visits have to have occurred and if not push back 30 days
     
 # Plot Prior Distribution Dose_response curve assumed (i.e. model skeleton)
@@ -94,7 +96,7 @@ results <- run_trial(
   decision_interval = 60, 
   min_data_per_update=1,
   safety_lead_in = 180, #lets assume 180 
-  max_overdose_prob     = 0.80,
+  max_overdose_prob     = 0.50,
   overdose_eval_threshold = .16
 )
 
@@ -102,109 +104,118 @@ results <- run_trial(
 
 ###### Plot MTD Estimates over Trial duration
 plot_mtd_over_time(results)
-
-
-#### Plot estimated 
 plot_est_dr(results)
 
 
 #############################################
 ############## Run in Parallel ##############
 #############################################
-
 library(parallel)
 
 # Set number of simulations and cores
-n_sims   <- 10
-n_cores  <- detectCores() - 1
+n_sims   <- 1000
+n_cores  <- max(1, detectCores() - 2)
+sims_per_core <- ceiling(n_sims / n_cores)
 
 # Define all `probs` vectors and patient counts
 probs_list <- list(
   c(0.13, 0.18, 0.21, 0.25, 0.30),
-  c(0.11, 0.15, 0.175, 0.20, 0.25),
-  c(0.10, 0.12, 0.15, 0.19, 0.25),
-  c(0.10, 0.115, 0.135, 0.15, 0.18),
+  c(0.11, 0.15, 0.18, 0.22, 0.27),
+  c(0.10, 0.12, 0.15, 0.19, 0.24),
+  c(0.10, 0.115, 0.130, 0.15, 0.19),
   c(0.10, 0.112, 0.128, 0.14, 0.15)
 )
+
 patient_counts <- c(40, 46)
 
-# Output directory
 output_dir <- "sim_outputs"
 dir.create(output_dir, showWarnings = FALSE)
 
-# Loop over all scenario combinations
+# Batching helper
+split_sim_ids <- function(n, k) {
+  split(seq_len(n), cut(seq_len(n), breaks = k, labels = FALSE))
+}
+
+# Outer scenario loop
 for (probs_idx in seq_along(probs_list)) {
   for (n_patients in patient_counts) {
-    
     message("Running scenario: probs=", probs_idx, " | n=", n_patients)
-    
-    # Pull fixed probs for this scenario
+
     probs <- probs_list[[probs_idx]]
     
-    # Define wrapper for parallelized simulation
-    run_single_trial <- function(sim_id) {
-      tryCatch({
-        message("  Sim ", sim_id)
-        
-        dlt_model <- true_model(
-          doses     = c(0.1, 0.13, 0.15, 0.17, 0.20),
-          probs     = probs,
-          target_dlt_rate = 0.15,
-          sigma_re  = 0.3,
-          plot      = FALSE,
-          dose_scale_factor = 10,
-          n_patients_spaghetti = n_patients
-        )
-        
-        visits <- sim_data(n_patients = n_patients,
-                           mean_enrollment_gap = 14,
-                           mean_visits = 11.7)
-        
-        prior_info <- get_prior(
-          doses = c(0.1, 0.13, 0.15, 0.17, 0.20),
-          probs = c(0.1, 0.12, 0.15, 0.19, 0.25),  # fixed prior
-          true_mtd = 0.15,
-          true_dlt_rate = 0.15,
-          int_prior = 0.3,
-          slope_prior = 0.08,
-          link = "logit",
-          dose_scale_factor = 10,
-          plot = FALSE,
-          force_through_mtd = TRUE
-        )
-        
-        result <- run_trial(
-          visits = visits,
-          prior_info = prior_info,
-          dlt_model = dlt_model,
-          target_dlt_rate = 0.15,
-          starting_dose = 0.15,
-          decision_interval = 60,
-          min_data_per_update = 1,
-          safety_lead_in = 180,
-          max_overdose_prob = 0.50,
-          overdose_eval_threshold = 0.16
-        )
-        
-        # Keep only essential output
-        list(
-          mtd_estimates       = result$mtd_estimates,
-          final_dose_response = result$final_dose_response,
-          true_mtd            = result$true_mtd,
-          final_mtd           = result$final_mtd  
-        )
-        
-        
-      }, error = function(e) {
-        message("    Sim ", sim_id, " failed: ", conditionMessage(e))
-        return(NULL)
+    # Set up cluster
+    cl <- makeCluster(n_cores)
+    
+    # Export necessary objects and packages
+    clusterExport(cl, varlist = c("true_model", "sim_data", "get_prior", "run_trial", "probs", "n_patients"), envir = environment())
+    clusterEvalQ(cl, library(brms))  # add others if needed
+    
+    # Define batched simulation runner
+    run_batch <- function(sim_ids) {
+      lapply(sim_ids, function(sim_id) {
+        tryCatch({
+          dlt_model <- true_model(
+            doses     = c(0.1, 0.13, 0.15, 0.17, 0.20),
+            probs     = probs,
+            target_dlt_rate = 0.15,
+            sigma_re  = 0.3,
+            plot      = F,
+            dose_scale_factor = 10,
+            n_patients_spaghetti = n_patients
+          )
+          
+          visits <- sim_data(n_patients = n_patients,
+                             mean_enrollment_gap = 14,
+                             mean_visits = 11.7)
+          
+          prior_info <- get_prior(
+            doses = c(0.1, 0.13, 0.15, 0.17, 0.20),
+            probs = c(0.08, 0.125, 0.15, 0.19, 0.24),
+            true_mtd = 0.15,
+            true_dlt_rate = 0.15,
+            int_prior = .8,
+            slope_prior = 0.8,
+            link = "logit",
+            dose_scale_factor = 10,
+            plot = T,
+            force_through_mtd =T
+          )
+          
+          result <- run_trial(
+            visits = visits,
+            prior_info = prior_info,
+            dlt_model = dlt_model,
+            target_dlt_rate = 0.15,
+            starting_dose = 0.15,
+            decision_interval = 60,
+            min_data_per_update = 20,
+            safety_lead_in = 180,
+            max_overdose_prob = 0.50,
+            overdose_eval_threshold = 0.16
+          )
+          
+          list(
+            mtd_estimates       = result$mtd_estimates,
+            final_dose_response = result$final_dose_response,
+            true_mtd            = result$true_mtd,
+            final_mtd           = result$final_mtd  
+          )
+        }, error = function(e) {
+          message("    Sim ", sim_id, " failed: ", conditionMessage(e))
+          return(NULL)
+        })
       })
     }
     
-    # Run simulations in parallel
-    sim_results <- mclapply(1:n_sims, run_single_trial, mc.cores = n_cores)
+    # Split work among workers
+    sim_batches <- split_sim_ids(n_sims, n_cores)
+    batch_results <- parLapply(cl, sim_batches, run_batch)
+    stopCluster(cl)
     
-    # Save compiled results list for this scenario
+    # Flatten the list
+    sim_results <- do.call(c, batch_results)
+    
+    # Save results
     outfile <- file.path(output_dir, paste0("results_probs", probs_idx, "_n", n_patients, ".rds"))
     saveRDS(sim_results, outfile)
   }
@@ -225,54 +236,48 @@ dose_levels <- c(0.1, 0.13, 0.15, 0.17, 0.20)
 output_dir <- "sim_outputs"
 rds_files <- list.files(output_dir, pattern = "^results_probs.*\\.rds$", full.names = TRUE)
 
-test= readRDS("sim_outputs/results_probs1_n40.rds")
-
-
-# Function to extract dose selection from each simulation result
-extract_dose_selections <- function(file_path) {
-  # Get scenario info from filename
-  scenario <- str_match(basename(file_path), "results_probs(\\d+)_n(\\d+)\\.rds")
-  probs_idx <- as.integer(scenario[2])
-  n_patients <- as.integer(scenario[3])
-  
-  # Read the compiled list
-  sim_list <- readRDS(file_path)
-  
-  # Extract final selected MTD from each sim (if available)
-  mtds <- map_chr(sim_list, function(sim) {
-    if (!is.null(sim) && !is.null(sim$mtd_estimates)) {
-      tail(sim$mtd_estimates$mtd, 1)
-    } else {
-      NA_character_
-    }
-  })
-  
-  # Summarize selection frequency
-  dose_table <- table(factor(mtds, levels = dose_levels))
-  total_sims <- sum(dose_table)
-  
+# Function to extract scenario info from filename
+parse_filename <- function(filename) {
+  # Example filename: "results_probs2_n40.rds"
   tibble(
-    probs_idx   = probs_idx,
-    n_patients  = n_patients,
-    dose        = as.numeric(names(dose_table)),
-    n_selected  = as.numeric(dose_table),
-    pct_selected = round(100 * as.numeric(dose_table) / total_sims, 1)
+    file = filename,
+    probs_idx = as.integer(str_match(basename(filename), "probs(\\d+)")[, 2]),
+    n_patients = as.integer(str_match(basename(filename), "_n(\\d+)")[, 2])
   )
 }
 
+# Load and summarize one file
+summarize_file <- function(file_row) {
+  sims <- readRDS(file_row$file)
+  tibble(
+    final_mtd = map_chr(sims, ~ if (!is.null(.x)) as.character(.x$final_mtd) else NA_character_),
+    probs_idx = file_row$probs_idx,
+    n_patients = file_row$n_patients
+  ) %>%
+    filter(!is.na(final_mtd))
+}
+
+# Combine all simulations
+summary_all <- rds_files %>%
+  map_df(~ summarize_file(parse_filename(.x)))
+
+# Tabulate MTD selection rates
+dose_summary <- summary_all %>%
+  count(probs_idx, n_patients, final_mtd) %>%
+  group_by(probs_idx, n_patients) %>%
+  mutate(pct_selected = n / sum(n)) %>%
+  ungroup() %>%
+  arrange(probs_idx, n_patients, desc(pct_selected))
+
+# Convert dose to numeric
+dose_summary <- dose_summary %>%
+  mutate(final_mtd = as.numeric(final_mtd))
+
+# Print or return summary
+dose_summary
 
 
-# Combine results across all scenarios
-dose_selection_summary <- map_dfr(rds_files, extract_dose_selections)
 
-# Arrange by scenario
-dose_selection_summary <- dose_selection_summary %>%
-  arrange(probs_idx, n_patients, dose)
-
-# View or save
-print(dose_selection_summary)
-# Optionally write to CSV
-# write_csv(dose_selection_summary, "dose_selection_summary.csv")
 
 
 
